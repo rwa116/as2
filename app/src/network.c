@@ -14,11 +14,23 @@
 #include "shutdown.h"
 #include "hal/sampler.h"
 
+enum Command {
+    COUNT,
+    LENGTH,
+    DIPS,
+    HISTORY,
+    STOP,
+    HELP,
+    ENTER,
+    UNKNOWN
+};
+
 static pthread_t networkThread;
 static bool isRunning;
 
 static void *listenLoop(void *arg);
-static void sendReply(char* messageRx, int socketDescriptor, struct sockaddr_in *sinRemote);
+static enum Command checkCommand(char* input);
+static void sendReply(enum Command command, int socketDescriptor, struct sockaddr_in *sinRemote);
 
 void Network_init(void) {
     isRunning = true;
@@ -33,6 +45,7 @@ void Network_cleanup(void) {
 #define MAX_LEN 1500
 #define PORT 12345
 static void *listenLoop(void *arg) {
+    enum Command lastCommand = UNKNOWN;
     // Socket initialization
     struct sockaddr_in sin = {0};
     sin.sin_family = AF_INET;
@@ -56,8 +69,9 @@ static void *listenLoop(void *arg) {
             (struct sockaddr*) &sinRemote, &sinLen);
 
         messageRx[bytesRx] = 0;
-
-        sendReply(messageRx, socketDescriptor, &sinRemote);
+        enum Command sentCommand = checkCommand(messageRx);
+        lastCommand = sentCommand == ENTER ? lastCommand : sentCommand;
+        sendReply(lastCommand, socketDescriptor, &sinRemote);
     }
 
     close(socketDescriptor);
@@ -65,53 +79,83 @@ static void *listenLoop(void *arg) {
     return arg;
 }
 
+static enum Command checkCommand(char* input) {
+    if(strcmp(input, "count\n") == 0) {
+        return COUNT;
+    }
+    else if(strcmp(input, "length\n") == 0) {
+        return LENGTH;
+    }
+    else if(strcmp(input, "dips\n") == 0) {
+        return DIPS;
+    }
+    else if(strcmp(input, "history\n") == 0) {
+        return HISTORY;
+    }
+    else if(strcmp(input, "stop\n") == 0) {
+        return STOP;
+    }
+    else if((strcmp(input, "help\n") == 0) || (strcmp(input, "?\n") == 0)) {
+        return HELP;
+    }
+    else if(strcmp(input, "\n") == 0) {
+        return ENTER;
+    }
+    else {
+        return UNKNOWN;
+    }
+}
+
 #define MAX_SAMPLE_SIZE 8
-static void sendReply(char* messageRx, int socketDescriptor, struct sockaddr_in *sinRemote) {
-        char messageTx[MAX_LEN];
-        unsigned int sinLen;
+static void sendReply(enum Command command, int socketDescriptor, struct sockaddr_in *sinRemote) {
+    char messageTx[MAX_LEN];
+    unsigned int sinLen;
 
-        if(strcmp(messageRx, "count\n") == 0) {
+    switch(command) {
+        case COUNT:
             snprintf(messageTx, MAX_LEN, "# samples taken total: %lld\n", Sampler_getNumSamplesTaken());
-        }
-        else if(strcmp(messageRx, "length\n") == 0) {
+            break;
+        case LENGTH:
             snprintf(messageTx, MAX_LEN, "# samples taken last second: %d\n", Sampler_getHistorySize());
-        }
-        else if(strcmp(messageRx, "dips\n") == 0) {
+            break;
+        case DIPS:
             snprintf(messageTx, MAX_LEN, "# Dips: %d\n", Sampler_getDips());
-        }
-        else if(strcmp(messageRx, "history\n") == 0) {
-            int length = 0;
-            int offset = 0;
-            double* history = Sampler_getHistory(&length);
-            for(int i=0; i<length; i++) {
-                int written = snprintf(messageTx + offset, MAX_LEN - offset, "%.3f", history[i]);
-                offset += written;
-
-                if(i != length - 1) {
-                    written = snprintf(messageTx + offset, MAX_LEN - offset, ", ");
+            break;
+        case HISTORY:
+            {
+                int length = 0;
+                int offset = 0;
+                double* history = Sampler_getHistory(&length);
+                for(int i=0; i<length; i++) {
+                    int written = snprintf(messageTx + offset, MAX_LEN - offset, "%.3f", history[i]);
                     offset += written;
-                }
 
-                if((i+1) % 10 == 0 || i == length - 1) {
-                    written = snprintf(messageTx + offset, MAX_LEN - offset, "\n");
-                    offset += written;
+                    if(i != length - 1) {
+                        written = snprintf(messageTx + offset, MAX_LEN - offset, ", ");
+                        offset += written;
+                    }
+
+                    if((i+1) % 10 == 0 || i == length - 1) {
+                        written = snprintf(messageTx + offset, MAX_LEN - offset, "\n");
+                        offset += written;
+                    }
+                    
+                    if(MAX_LEN - offset < MAX_SAMPLE_SIZE) {
+                        sinLen = sizeof(*sinRemote);
+                        sendto(socketDescriptor, messageTx, strlen(messageTx), 0,
+                            (struct sockaddr*) sinRemote, sinLen);
+
+                        memset(messageTx, 0, MAX_LEN);
+                        offset = 0;
+                    }
                 }
-                
-                if(MAX_LEN - offset < MAX_SAMPLE_SIZE) {
-                    sinLen = sizeof(*sinRemote);
-                    sendto(socketDescriptor, messageTx, strlen(messageTx), 0,
-                        (struct sockaddr*) sinRemote, sinLen);
-                    memset(messageTx, 0, MAX_LEN);
-                    offset = 0;
-                }
+                free(history);
             }
-            free(history);
-        }
-        else if(strcmp(messageRx, "stop\n") == 0) {
+            break;
+        case STOP:
             Shutdown_signalShutdown();
             return;
-        }
-        else {
+        case HELP:
             snprintf(messageTx, MAX_LEN, 
                 "Accepted command examples: \n"
                 "count \t -- get the total number of samples taken. \n"
@@ -120,9 +164,17 @@ static void sendReply(char* messageRx, int socketDescriptor, struct sockaddr_in 
                 "history \t -- get all the samples in the previously completed second. \n"
                 "stop \t -- cause the server program to end. \n"
                 "<enter> \t -- repeat last command.\n"); 
-        }
-        sinLen = sizeof(*sinRemote);
-        sendto(socketDescriptor, messageTx, strlen(messageTx), 0, 
-            (struct sockaddr*) sinRemote, sinLen);
+            break;
+        case UNKNOWN:
+            snprintf(messageTx, MAX_LEN, "Unknown command.\n");
+            break;
+        default:
+            perror("Invalid command");
+            exit(1);
+    }
+    
+    sinLen = sizeof(*sinRemote);
+    sendto(socketDescriptor, messageTx, strlen(messageTx), 0, 
+        (struct sockaddr*) sinRemote, sinLen);
 }
 
