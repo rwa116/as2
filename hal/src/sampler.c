@@ -7,6 +7,7 @@
 #include "hal/file.h"
 
 static void *collectionLoop(void *arg);
+static void calculateDips(void);
 static void sleepForMs(long long delayInMs);
 static long long getTimeInMs(void);
 
@@ -16,27 +17,27 @@ bool isRunning;
 struct sampler_history {
     double samples[1000];
     int size;
+    int dips;
 };
 
 struct sampler_info {
     double samples[1000];
+    double average;
     int currentSize;
-    int currentSampleSum;
     int totalSize;
-    double totalSampleSum;
     struct sampler_history samplerHistory;
 };
 
 #define VOLTAGE_DIRECTORY "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
 static struct sampler_info samplerInfo = {
     .samples = {0},
+    .average = 0,
     .currentSize = 0,
-    .currentSampleSum = 0,
     .totalSize = 0,
-    .totalSampleSum = 0,
     .samplerHistory = {
         .samples = {0},
-        .size = 0
+        .size = 0,
+        .dips = 0
     }
 };
 
@@ -56,13 +57,15 @@ static void *collectionLoop(void *arg) {
         long long currentTime = getTimeInMs();
         while(getTimeInMs() - currentTime < 1000) {
             File_readFromFile(VOLTAGE_DIRECTORY, buffer);
-            double readValue = strtod(buffer, NULL);
+            double readValue = strtod(buffer, NULL) / 4095 * 1.8;
+            samplerInfo.average = samplerInfo.average == 0 ? readValue : samplerInfo.average*0.999 + readValue*0.001;
             samplerInfo.samples[samplerInfo.currentSize] = readValue;
-            samplerInfo.currentSampleSum += readValue;
-            samplerInfo.totalSampleSum += readValue;
             samplerInfo.currentSize++;
             sleepForMs(1);
         }
+
+        samplerInfo.samplerHistory.dips = 0;
+        calculateDips();
         Sampler_moveCurrentDataToHistory();
     }
     return arg;
@@ -74,7 +77,6 @@ void Sampler_moveCurrentDataToHistory(void) {
     samplerInfo.totalSize += samplerInfo.currentSize;
 
     samplerInfo.currentSize = 0;
-    samplerInfo.currentSampleSum = 0;
     memset(samplerInfo.samples, 0, sizeof(double)*samplerInfo.currentSize);
 }
 
@@ -92,12 +94,30 @@ double* Sampler_getHistory(int *size) {
 }
 
 double Sampler_getAverageReading(void) {
-    return samplerInfo.currentSize != 0 ? samplerInfo.currentSampleSum / samplerInfo.currentSize : 0;
+    return samplerInfo.average;
 }
 
 
 long long Sampler_getNumSamplesTaken(void) {
     return samplerInfo.totalSize;
+}
+
+int Sampler_getDips(void) {
+    return samplerInfo.samplerHistory.dips;
+}
+
+void calculateDips(void) {
+    bool dipped = false;
+    double* history = samplerInfo.samplerHistory.samples;
+    for(int i=0; i<samplerInfo.samplerHistory.size; i++) {
+        if(!dipped && (history[i] < samplerInfo.average - 0.1) | (history[i] > samplerInfo.average + 0.1)) {
+            dipped = true;
+            samplerInfo.samplerHistory.dips++;
+        }
+        if(dipped && (history[i] > samplerInfo.average - 0.07) && (history[i] < samplerInfo.average + 0.07)) {
+            dipped = false;
+        }
+    }
 }
 
 static void sleepForMs(long long delayInMs) {
