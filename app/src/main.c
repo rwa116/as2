@@ -7,6 +7,7 @@
 #include "hal/sampler.h"
 #include "network.h"
 #include "shutdown.h"
+#include "statistics.h"
 
 // static long long getTimeInMs(void);
 // static void sleepForMs(long long delayInMs);
@@ -15,11 +16,13 @@ int main() {
 
     Shutdown_init();
     Sampler_init();
+    Statistics_init();
     Network_init();
 
     Shutdown_waitForShutdown();
     
     Network_cleanup();
+    Statistics_cleanup();
     Sampler_cleanup();
     Shutdown_cleanup();
 

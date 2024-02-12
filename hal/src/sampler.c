@@ -5,6 +5,7 @@
 
 #include "hal/sampler.h"
 #include "hal/file.h"
+#include "hal/periodTimer.h"
 
 static void *collectionLoop(void *arg);
 static void calculateDips(void);
@@ -12,36 +13,23 @@ static void sleepForMs(long long delayInMs);
 static long long getTimeInMs(void);
 
 static pthread_t sampleThread;
-bool isRunning;
+static bool isRunning;
 
-struct sampler_history {
-    double samples[1000];
-    int size;
-    int dips;
-};
+static double currentSamples[1000] = {0};
+static int currentSize = 0;
 
-struct sampler_info {
-    double samples[1000];
-    double average;
-    int currentSize;
-    int totalSize;
-    struct sampler_history samplerHistory;
-};
+static double average = 0;
+static int totalSize = 0;
+
+static double historySamples[1000];
+static int historySize;
+static int historyDips;
+Period_statistics_t historyStats;
 
 #define VOLTAGE_DIRECTORY "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
-static struct sampler_info samplerInfo = {
-    .samples = {0},
-    .average = 0,
-    .currentSize = 0,
-    .totalSize = 0,
-    .samplerHistory = {
-        .samples = {0},
-        .size = 0,
-        .dips = 0
-    }
-};
 
 void Sampler_init(void) {
+    Period_init();
     isRunning = true;
     pthread_create(&sampleThread, NULL, collectionLoop, NULL);
 }
@@ -49,72 +37,81 @@ void Sampler_init(void) {
 void Sampler_cleanup(void) {
     isRunning = false;
     pthread_join(sampleThread, NULL);
+    Period_cleanup();
 }
 
 static void *collectionLoop(void *arg) {
     char buffer[16];
     while(isRunning) {
+        long long startTime = getTimeInMs();
         long long currentTime = getTimeInMs();
-        while(getTimeInMs() - currentTime < 1000) {
+        while(currentTime - startTime < 1000) {
             File_readFromFile(VOLTAGE_DIRECTORY, buffer);
             double readValue = strtod(buffer, NULL) / 4095 * 1.8;
-            samplerInfo.average = samplerInfo.average == 0 ? readValue : samplerInfo.average*0.999 + readValue*0.001;
-            samplerInfo.samples[samplerInfo.currentSize] = readValue;
-            samplerInfo.currentSize++;
+            average = average == 0 ? readValue : average*0.999 + readValue*0.001;
+            currentSamples[currentSize] = readValue;
+            currentSize++;
             sleepForMs(1);
+            currentTime = getTimeInMs();
+            Period_markEvent(PERIOD_EVENT_SAMPLE_LIGHT);
         }
 
-        samplerInfo.samplerHistory.dips = 0;
         calculateDips();
+        Period_getStatisticsAndClear(PERIOD_EVENT_SAMPLE_LIGHT, &historyStats);
         Sampler_moveCurrentDataToHistory();
     }
     return arg;
 }
 
 void Sampler_moveCurrentDataToHistory(void) {
-    memcpy(samplerInfo.samplerHistory.samples, samplerInfo.samples, sizeof(double)*samplerInfo.currentSize);
-    samplerInfo.samplerHistory.size = samplerInfo.currentSize;
-    samplerInfo.totalSize += samplerInfo.currentSize;
+    memcpy(historySamples, currentSamples, sizeof(double)*currentSize);
+    historySize = currentSize;
+    totalSize += currentSize;
 
-    samplerInfo.currentSize = 0;
-    memset(samplerInfo.samples, 0, sizeof(double)*samplerInfo.currentSize);
+    currentSize = 0;
+    memset(currentSamples, 0, sizeof(double)*currentSize);
+}
+
+Period_statistics_t* Sampler_getHistoryStats(void) {
+    return &historyStats;
 }
 
 int Sampler_getHistorySize(void) {
-    return samplerInfo.samplerHistory.size;
+    return historyStats.numSamples;
 }
 
 double* Sampler_getHistory(int *size) {
-    *size = samplerInfo.samplerHistory.size;
+    *size = historySize;
 
     double* history = (double*)malloc(sizeof(double) * *size);
-    memcpy(history, samplerInfo.samplerHistory.samples, sizeof(double) * *size);
+    memcpy(history, historySamples, sizeof(double) * *size);
 
     return history;
 }
 
 double Sampler_getAverageReading(void) {
-    return samplerInfo.average;
+    return average;
 }
 
 
 long long Sampler_getNumSamplesTaken(void) {
-    return samplerInfo.totalSize;
+    return totalSize;
 }
 
 int Sampler_getDips(void) {
-    return samplerInfo.samplerHistory.dips;
+    return historyDips;
 }
 
-void calculateDips(void) {
+static void calculateDips(void) {
+    historyDips = 0;
     bool dipped = false;
-    double* history = samplerInfo.samplerHistory.samples;
-    for(int i=0; i<samplerInfo.samplerHistory.size; i++) {
-        if(!dipped && (history[i] < samplerInfo.average - 0.1) | (history[i] > samplerInfo.average + 0.1)) {
+    double* history = historySamples;
+    for(int i=0; i<historySize; i++) {
+        if(!dipped && (history[i] < average - 0.1) | (history[i] > average + 0.1)) {
             dipped = true;
-            samplerInfo.samplerHistory.dips++;
+            historyDips++;
         }
-        if(dipped && (history[i] > samplerInfo.average - 0.07) && (history[i] < samplerInfo.average + 0.07)) {
+        if(dipped && (history[i] > average - 0.07) && (history[i] < average + 0.07)) {
             dipped = false;
         }
     }

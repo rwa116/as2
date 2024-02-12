@@ -13,9 +13,13 @@
 #ifndef _SAMPLER_H_
 #define _SAMPLER_H_
 
+#include "hal/periodTimer.h"
+
 // Begin/end the background thread which samples light levels.
 void Sampler_init(void);
 void Sampler_cleanup(void);
+
+Period_statistics_t* Sampler_getHistoryStats(void);
 
 // Must be called once every 1s.
 // Moves the samples that it has been collecting this second into
