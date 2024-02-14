@@ -1,6 +1,4 @@
-#ifndef _PERIOD_TIMER_H_
-#define _PERIOD_TIMER_H_
-
+// Period Timer module
 // Module to record and report the timing of periodic events.
 //     Written by Brian Fraser
 // Usage:
@@ -16,6 +14,10 @@
 //     information to print to the screen.
 
 // Maximum number of timestamps to record for a given event.
+
+#ifndef _PERIOD_TIMER_H_
+#define _PERIOD_TIMER_H_
+
 #define MAX_EVENT_TIMESTAMPS (1024*4)
 
 enum Period_whichEvent {

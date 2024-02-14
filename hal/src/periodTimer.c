@@ -130,10 +130,6 @@ static void updateStats(
     pStats->numSamples = pData->timestampCount;
 }
 
-
-
-
-
 // Timing function
 static long long getTimeInNanoS(void) 
 {

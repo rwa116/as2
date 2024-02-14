@@ -6,9 +6,11 @@
 #include "hal/sampler.h"
 #include "hal/file.h"
 #include "hal/periodTimer.h"
+#include "hal/segDisplay.h"
 
 static void *collectionLoop(void *arg);
 static void calculateDips(void);
+static void moveCurrentDataToHistory(void);
 static void sleepForMs(long long delayInMs);
 static long long getTimeInMs(void);
 
@@ -41,6 +43,7 @@ void Sampler_cleanup(void) {
 }
 
 static void *collectionLoop(void *arg) {
+    (void)arg;
     char buffer[16];
     while(isRunning) {
         long long startTime = getTimeInMs();
@@ -58,18 +61,10 @@ static void *collectionLoop(void *arg) {
 
         calculateDips();
         Period_getStatisticsAndClear(PERIOD_EVENT_SAMPLE_LIGHT, &historyStats);
-        Sampler_moveCurrentDataToHistory();
+        moveCurrentDataToHistory();
+        Seg_updateDigitValues(historyDips);
     }
-    return arg;
-}
-
-void Sampler_moveCurrentDataToHistory(void) {
-    memcpy(historySamples, currentSamples, sizeof(double)*currentSize);
-    historySize = currentSize;
-    totalSize += currentSize;
-
-    currentSize = 0;
-    memset(currentSamples, 0, sizeof(double)*currentSize);
+    return NULL;
 }
 
 Period_statistics_t* Sampler_getHistoryStats(void) {
@@ -93,7 +88,6 @@ double Sampler_getAverageReading(void) {
     return average;
 }
 
-
 long long Sampler_getNumSamplesTaken(void) {
     return totalSize;
 }
@@ -115,6 +109,15 @@ static void calculateDips(void) {
             dipped = false;
         }
     }
+}
+
+static void moveCurrentDataToHistory(void) {
+    memcpy(historySamples, currentSamples, sizeof(double)*currentSize);
+    historySize = currentSize;
+    totalSize += currentSize;
+
+    currentSize = 0;
+    memset(currentSamples, 0, sizeof(double)*currentSize);
 }
 
 static void sleepForMs(long long delayInMs) {

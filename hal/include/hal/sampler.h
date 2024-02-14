@@ -1,4 +1,4 @@
-// sampler.h
+// Sampler module
 // Module to sample light levels in the background (uses a thread).
 //
 // It continuously samples the light level, and stores it internally.
@@ -10,6 +10,7 @@
 // To make easy to work with the data, the app must call
 // Sampler_moveCurrentDataToHistory() each second to trigger this
 // module to move the current samples into the history.
+
 #ifndef _SAMPLER_H_
 #define _SAMPLER_H_
 
@@ -19,12 +20,9 @@
 void Sampler_init(void);
 void Sampler_cleanup(void);
 
+// Gets history stats from period timer for current history
+// i.e., average time between samples, min, max, num samples
 Period_statistics_t* Sampler_getHistoryStats(void);
-
-// Must be called once every 1s.
-// Moves the samples that it has been collecting this second into
-// the history, which makes the samples available for reads (below).
-void Sampler_moveCurrentDataToHistory(void);
 
 // Get the number of samples collected during the previous complete second.
 int Sampler_getHistorySize(void);
@@ -42,6 +40,7 @@ double Sampler_getAverageReading(void);
 // Get the total number of light level samples taken so far.
 long long Sampler_getNumSamplesTaken(void);
 
+// Gets the number of dips from 1s history
 int Sampler_getDips(void);
 
 #endif

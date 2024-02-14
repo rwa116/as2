@@ -45,6 +45,7 @@ void Network_cleanup(void) {
 #define MAX_LEN 1500
 #define PORT 12345
 static void *listenLoop(void *arg) {
+    (void)arg;
     enum Command lastCommand = UNKNOWN;
     // Socket initialization
     struct sockaddr_in sin = {0};
@@ -76,7 +77,7 @@ static void *listenLoop(void *arg) {
 
     close(socketDescriptor);
 
-    return arg;
+    return NULL;
 }
 
 static enum Command checkCommand(char* input) {

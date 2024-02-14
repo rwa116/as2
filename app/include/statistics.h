@@ -6,7 +6,6 @@
 #define _STATISTICS_H
 
 void Statistics_init(void);
-
 void Statistics_cleanup(void);
 
 #endif

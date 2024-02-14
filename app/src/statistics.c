@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <stdlib.h>
 
 #include "statistics.h"
 #include "hal/sampler.h"
+#include "hal/led.h"
 
 static void *printingLoop(void *arg);
 static void printStatistics(void);
@@ -23,11 +25,12 @@ void Statistics_cleanup(void) {
 }
 
 static void *printingLoop(void *arg) {
+    (void)arg;
     while(isRunning) {
         sleepForMs(1000);
         printStatistics();
     }
-    return arg;
+    return NULL;
 }
 
 static void printStatistics(void) {
@@ -35,10 +38,11 @@ static void printStatistics(void) {
     double avgSample = Sampler_getAverageReading();
     int dips = Sampler_getDips();
     int historySize = 0;
+    int potValue = Led_getPOTValue();
     double* history = Sampler_getHistory(&historySize);
     Period_statistics_t* stats = Sampler_getHistoryStats();
     printf("#Smpl/s = %d \tPOT @ %d => %dHz \tavg = %1.3fV \tdips = %d\t Smpl ms[ %1.3f, %1.3f] avg %1.3f/%d\n",
-        samples, 0, 0, avgSample, dips, 
+        samples, potValue, potValue/40, avgSample, dips, 
         stats->minPeriodInMs, stats->maxPeriodInMs, stats->avgPeriodInMs, stats->numSamples);
 
     int currentSample = 0;
@@ -47,6 +51,7 @@ static void printStatistics(void) {
         printf("  %d:%1.3f  ", currentSample, history[currentSample]);
         currentSample += increment;
     }
+    free(history);
     printf("\n");
 }
 
