@@ -26,7 +26,7 @@ enum Command {
 };
 
 static pthread_t networkThread;
-static bool isRunning;
+static _Atomic bool isRunning;
 
 static void *listenLoop(void *arg);
 static enum Command checkCommand(char* input);

@@ -10,7 +10,7 @@ static void runCommand(char* command);
 static void *pwmMonitorUpdateLoop(void *arg);
 static void sleepForMs(long long delayInMs);
 
-static bool isRunning;
+static _Atomic bool isRunning;
 static int currentPOTValue;
 static pthread_t flashingThread;
 

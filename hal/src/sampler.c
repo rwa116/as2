@@ -15,7 +15,7 @@ static void sleepForMs(long long delayInMs);
 static long long getTimeInMs(void);
 
 static pthread_t sampleThread;
-static bool isRunning;
+static _Atomic bool isRunning;
 
 static pthread_mutex_t historyBufferLock;
 static pthread_mutex_t historyStatsLock;

@@ -48,13 +48,13 @@ static struct SegValues getSegValues(unsigned int digitValue);
 static void sleepForMs(long long delayInMs);
 static void runCommand(char* command);
 
-static bool isRunning;
+static _Atomic bool isRunning;
 static pthread_t segThread;
 static struct DigitValues digitValues;
 
 void Seg_init(void) {
     isRunning = true;
-    segThread = pthread_create(&segThread, NULL, segDisplayLoop, NULL);
+    pthread_create(&segThread, NULL, segDisplayLoop, NULL);
 }
 
 void Seg_cleanup(void) {

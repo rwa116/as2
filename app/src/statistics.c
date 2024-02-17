@@ -11,7 +11,7 @@ static void *printingLoop(void *arg);
 static void printStatistics(void);
 static void sleepForMs(long long delayInMs);
 
-static bool isRunning;
+static _Atomic bool isRunning;
 static pthread_t printingThread;
 
 void Statistics_init(void) {
