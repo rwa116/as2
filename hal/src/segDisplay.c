@@ -73,6 +73,10 @@ void Seg_updateDigitValues(unsigned int newValue) {
     }
 }
 
+#define CONFIG_PINS_OUT_COMMAND "echo out > /sys/class/gpio/gpio61/direction; echo out > /sys/class/gpio/gpio44/direction"
+#define CONFIG_PINS_I2C_COMMAND "config-pin P9_17 i2c; config-pin P9_18 i2c"
+#define ZEN_RED_I2C_OUTPUT_COMMAND "i2cset -y 1 0x20 0x02 0x00; i2cset -y 1 0x20 0x03 0x00"
+
 #define FIRST_DIGIT_OFF "echo 0 > /sys/class/gpio/gpio61/value"
 #define SECOND_DIGIT_OFF "echo 0 > /sys/class/gpio/gpio44/value"
 #define FIRST_DIGIT_ON "echo 1 > /sys/class/gpio/gpio61/value"
@@ -84,6 +88,10 @@ static void *segDisplayLoop(void *arg) {
     unsigned int currentSecondDigitValue = 0;
     struct SegValues firstValues = {0, 0};
     struct SegValues secondValues = {0, 0};
+    // Configure pins for I2C
+    runCommand(CONFIG_PINS_OUT_COMMAND);
+    runCommand(CONFIG_PINS_I2C_COMMAND);
+    runCommand(ZEN_RED_I2C_OUTPUT_COMMAND);
     while(isRunning) {
         // Update seg value structs if we have an update to our digit values
         if((digitValues.first != currentFirstDigitValue)) {
@@ -196,8 +204,8 @@ static struct SegValues getSegValues(unsigned int digitValue) {
             segValues.regBVal = 1 + 2 + 32 + 128;
             break;
         default:
-            segValues.regAVal = 8 + 64;
-            segValues.regBVal = 1 + 2 + 32 + 128;
+            segValues.regAVal = 8 + 64 + 128;
+            segValues.regBVal = 1 + 2 + 32;
             break;
     }
     return segValues;
