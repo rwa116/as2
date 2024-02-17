@@ -40,10 +40,10 @@ static void printStatistics(void) {
     int historySize = 0;
     int potValue = Led_getPOTValue();
     double* history = Sampler_getHistory(&historySize);
-    Period_statistics_t* stats = Sampler_getHistoryStats();
+    Period_statistics_t stats = Sampler_getHistoryStats();
     printf("#Smpl/s = %d \tPOT @ %d => %dHz \tavg = %1.3fV \tdips = %d\t Smpl ms[ %1.3f, %1.3f] avg %1.3f/%d\n",
         samples, potValue, potValue/40, avgSample, dips, 
-        stats->minPeriodInMs, stats->maxPeriodInMs, stats->avgPeriodInMs, stats->numSamples);
+        stats.minPeriodInMs, stats.maxPeriodInMs, stats.avgPeriodInMs, stats.numSamples);
 
     int currentSample = 0;
     int increment = historySize / 20 == 0 ? 1 : historySize / 20;

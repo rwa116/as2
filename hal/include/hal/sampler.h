@@ -22,7 +22,7 @@ void Sampler_cleanup(void);
 
 // Gets history stats from period timer for current history
 // i.e., average time between samples, min, max, num samples
-Period_statistics_t* Sampler_getHistoryStats(void);
+Period_statistics_t Sampler_getHistoryStats(void);
 
 // Get the number of samples collected during the previous complete second.
 int Sampler_getHistorySize(void);

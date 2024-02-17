@@ -17,15 +17,18 @@ static long long getTimeInMs(void);
 static pthread_t sampleThread;
 static bool isRunning;
 
+static pthread_mutex_t historyBufferLock;
+static pthread_mutex_t historyStatsLock;
+
 static double currentSamples[1000] = {0};
 static int currentSize = 0;
 
-static double average = 0;
-static int totalSize = 0;
+static _Atomic double average = 0;
+static _Atomic int totalSize = 0;
 
 static double historySamples[1000];
-static int historySize;
-static int historyDips;
+static _Atomic int historySize;
+static _Atomic int historyDips;
 Period_statistics_t historyStats;
 
 #define VOLTAGE_DIRECTORY "/sys/bus/iio/devices/iio:device0/in_voltage1_raw"
@@ -33,11 +36,15 @@ Period_statistics_t historyStats;
 void Sampler_init(void) {
     Period_init();
     isRunning = true;
+    pthread_mutex_init(&historyBufferLock, NULL);
+    pthread_mutex_init(&historyStatsLock, NULL);
     pthread_create(&sampleThread, NULL, collectionLoop, NULL);
 }
 
 void Sampler_cleanup(void) {
     isRunning = false;
+    pthread_mutex_destroy(&historyStatsLock);
+    pthread_mutex_destroy(&historyBufferLock);
     pthread_join(sampleThread, NULL);
     Period_cleanup();
 }
@@ -60,26 +67,34 @@ static void *collectionLoop(void *arg) {
         }
 
         calculateDips();
+        pthread_mutex_lock(&historyStatsLock);
         Period_getStatisticsAndClear(PERIOD_EVENT_SAMPLE_LIGHT, &historyStats);
+        pthread_mutex_unlock(&historyStatsLock);
         moveCurrentDataToHistory();
         Seg_updateDigitValues(historyDips);
     }
     return NULL;
 }
 
-Period_statistics_t* Sampler_getHistoryStats(void) {
-    return &historyStats;
+Period_statistics_t Sampler_getHistoryStats(void) {
+    Period_statistics_t historyStatsCopy;
+    pthread_mutex_lock(&historyStatsLock);
+    historyStatsCopy =  historyStats;
+    pthread_mutex_unlock(&historyStatsLock);
+    return historyStatsCopy;
 }
 
 int Sampler_getHistorySize(void) {
-    return historyStats.numSamples;
+    return historySize;
 }
 
 double* Sampler_getHistory(int *size) {
+    pthread_mutex_lock(&historyBufferLock);
     *size = historySize;
 
     double* history = (double*)malloc(sizeof(double) * *size);
     memcpy(history, historySamples, sizeof(double) * *size);
+    pthread_mutex_unlock(&historyBufferLock);
 
     return history;
 }
@@ -112,10 +127,13 @@ static void calculateDips(void) {
 }
 
 static void moveCurrentDataToHistory(void) {
+    pthread_mutex_lock(&historyBufferLock);
+    memset(historySamples, 0, sizeof(double)*historySize);
     memcpy(historySamples, currentSamples, sizeof(double)*currentSize);
     historySize = currentSize;
-    totalSize += currentSize;
+    pthread_mutex_unlock(&historyBufferLock);
 
+    totalSize += currentSize;
     currentSize = 0;
     memset(currentSamples, 0, sizeof(double)*currentSize);
 }
