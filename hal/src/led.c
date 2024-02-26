@@ -23,6 +23,7 @@ static pthread_t flashingThread;
 void Led_init() {
     isRunning = true;
     runCommand(PWM_ENABLE_PIN_COMMAND);
+    sleepForMs(100); // Wait for pin to be enabled
     pthread_create(&flashingThread, NULL, pwmMonitorUpdateLoop, NULL);
 }
 

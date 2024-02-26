@@ -46,7 +46,7 @@ static void printStatistics(void) {
         stats.minPeriodInMs, stats.maxPeriodInMs, stats.avgPeriodInMs, stats.numSamples);
 
     int currentSample = 0;
-    int increment = historySize / 20 == 0 ? 1 : historySize / 20;
+    int increment = historySize / 10 == 0 ? 1 : historySize / 10;
     while(currentSample < historySize) {
         printf("  %d:%1.3f  ", currentSample, history[currentSample]);
         currentSample += increment;

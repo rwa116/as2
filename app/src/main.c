@@ -11,9 +11,6 @@
 #include "hal/led.h"
 #include "hal/segDisplay.h"
 
-// static long long getTimeInMs(void);
-// static void sleepForMs(long long delayInMs);
-
 int main() {
 
     Shutdown_init();
