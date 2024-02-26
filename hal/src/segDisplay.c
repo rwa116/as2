@@ -9,6 +9,7 @@
 #include <linux/i2c-dev.h>
 
 #include "hal/segDisplay.h"
+#include "hal/file.h"
 
 /**
  *   -----1b------
@@ -77,10 +78,8 @@ void Seg_updateDigitValues(unsigned int newValue) {
 #define CONFIG_PINS_I2C_COMMAND "config-pin P9_17 i2c; config-pin P9_18 i2c"
 #define ZEN_RED_I2C_OUTPUT_COMMAND "i2cset -y 1 0x20 0x02 0x00; i2cset -y 1 0x20 0x03 0x00"
 
-#define FIRST_DIGIT_OFF "echo 0 > /sys/class/gpio/gpio61/value"
-#define SECOND_DIGIT_OFF "echo 0 > /sys/class/gpio/gpio44/value"
-#define FIRST_DIGIT_ON "echo 1 > /sys/class/gpio/gpio61/value"
-#define SECOND_DIGIT_ON "echo 1 > /sys/class/gpio/gpio44/value"
+#define FIRST_DIGIT_FILE "/sys/class/gpio/gpio61/value"
+#define SECOND_DIGIT_FILE "/sys/class/gpio/gpio44/value"
 static void *segDisplayLoop(void *arg) {
     (void)arg;
     int i2cFileDesc = initI2cBus(I2CDRV_LINUX_BUS1, I2C_DEVICE_ADDRESS);
@@ -103,27 +102,27 @@ static void *segDisplayLoop(void *arg) {
             secondValues = getSegValues(currentSecondDigitValue);
         }
         // Turn both digits off
-        runCommand(FIRST_DIGIT_OFF);
-        runCommand(SECOND_DIGIT_OFF);
+        File_writeToFile(FIRST_DIGIT_FILE, "0");
+        File_writeToFile(SECOND_DIGIT_FILE, "0");
 
         // Write first digit and turn digit on, then sleep 5ms
         writeI2cReg(i2cFileDesc, REG_OUTA, firstValues.regAVal);
         writeI2cReg(i2cFileDesc, REG_OUTB, firstValues.regBVal);
-        runCommand(FIRST_DIGIT_ON);
+        File_writeToFile(FIRST_DIGIT_FILE, "1");
         sleepForMs(5);
 
         // Turn both digits off
-        runCommand(FIRST_DIGIT_OFF);
-        runCommand(SECOND_DIGIT_OFF);
+        File_writeToFile(FIRST_DIGIT_FILE, "0");
+        File_writeToFile(SECOND_DIGIT_FILE, "0");
 
         // Write second digit and turn digit on, then sleep 5ms
         writeI2cReg(i2cFileDesc, REG_OUTA, secondValues.regAVal);
         writeI2cReg(i2cFileDesc, REG_OUTB, secondValues.regBVal);
-        runCommand(SECOND_DIGIT_ON);
+        File_writeToFile(SECOND_DIGIT_FILE, "1");
         sleepForMs(5);
     }
-    runCommand(FIRST_DIGIT_OFF);
-    runCommand(SECOND_DIGIT_OFF);
+    File_writeToFile(FIRST_DIGIT_FILE, "0");
+    File_writeToFile(SECOND_DIGIT_FILE, "0");
     close(i2cFileDesc);
     return NULL;
 }
